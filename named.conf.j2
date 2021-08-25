@@ -1,1 +1,28 @@
+{% for zone in zones %}
+zone "{{ zone }}" IN  {
+
+{% if bind_role == 'master' %}
+    type master;
+{% if zone == '10.10.10' %}
+    file "/etc/bind/ptr/{{ zone }}";
+{% else %}
+    file "/etc/bind/dns/{{ zone }}";
+{% endif %}
+    notify yes;
+{% if slaves is defined %}
+    allow-transfer  {
+{% for address in slaves %}
+        {{ address }};
+{% endfor %} };
+{% endif %}
+{% elif bind_role == 'slave' %}
+    type slave;
+    file "/var/cache/bind/{{ zone }}";
+    masters {
+        {{ master_ip }};
+    };
+{% endif %}
+};
+
+{% endfor %}
 
