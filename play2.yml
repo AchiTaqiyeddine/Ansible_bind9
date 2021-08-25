@@ -1,0 +1,77 @@
+- hosts: webservers
+  become: true
+  vars_files: vars.yml
+
+  tasks:
+  - name: install bind9 and dns utils
+    apt:
+      name: ['dnsutils', 'bind9', ]
+      state: present
+      update_cache: yes
+    when: ansible_facts['os_family'] == "Debian"
+
+  - name: install apache, php, php-mysql
+    apt:
+      name: ['apache2', 'php', 'php-mysql']
+      state: absent
+      update_cache: yes
+    when: inventory_hostname == 'slave-1'
+
+
+  - name: Configuration named.conf
+    vars :
+      bind_role : master
+      slaves :
+         - 10.10.10.10
+    template:
+      src: "templates/named.conf.j2"
+      dest: "/etc/bind/named.conf"
+      owner: root
+      group: root
+      mode: 0644
+    notify: Restart bind9
+    when: inventory_hostname == 'slave-1'
+
+  - name: Configuration named.conf
+    vars :
+      bind_role : slave
+
+    template:
+      src: "templates/named.conf.j2"
+      dest: "/etc/bind/named.conf"
+      owner: root
+      group: root
+      mode: 0644
+    notify: Restart bind9
+    when: inventory_hostname == 'slave-2'
+
+
+  - name: check_dns_config
+    command: named-checkconf /etc/bind/named.conf
+    register: myoutput
+    when: inventory_hostname == 'slave-1'
+
+
+  - name: Give insecure permissions to an existing file
+    ansible.builtin.file:
+      path: /etc/bind/dns
+      owner: root
+      group: root
+      state: directory
+      #mode: '1777'
+
+  - name: Configuration named.conf
+    template:
+      src: "templates/zon1.j2"
+      dest: "/etc/bind/dns/zone1"
+      owner: root
+      group: root
+      mode: 0644
+    notify: Restart bind9
+
+
+  handlers:
+  - name: Restart bind9
+    service:
+      name: bind9
+      state: restarted
